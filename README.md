@@ -2,67 +2,27 @@
 
 [English](./README.en.md) · **中文**
 
-一个用 Python 实现的 MCP（Model Context Protocol）server，把 Obsidian 仓库通过 [Obsidian Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) 插件暴露给任何兼容 MCP 的客户端（Claude Desktop、Claude Code、Cursor 等），让 AI 可以读写你的笔记。
-
-## 安装来源
-
-这个包**直接从 GitHub 分发**，目前还没发到 PyPI。
-
-下面所有客户端配置都用 `uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian` 这种形式调用 —— `uvx` 会自动：
-
-1. 把仓库 clone 到 `~/.cache/uv/` 下的临时位置（首次运行才下载，后续走缓存）
-2. 创建临时虚拟环境，按 `pyproject.toml` 装好 `httpx` / `mcp[cli]`
-3. 跑包里注册的 `mcp-obsidian` 入口（= `mcp_obsidian.server:main`）
-
-**用户不需要 `git clone` 这个仓库**，也不需要手动 `pip install`，只要装了 [`uv`](https://github.com/astral-sh/uv) 就行：
-
-```bash
-# macOS
-brew install uv
-# 或跨平台
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-想锁定到某个版本，把 URL 改成带 ref 的形式：
-
-```
-git+https://github.com/Valen-akm/obsidian-mcp.git@v0.1.0
-git+https://github.com/Valen-akm/obsidian-mcp.git@<commit-sha>
-```
-
-升级时，加 `--refresh` 让 `uvx` 重新拉一次：`uvx --refresh --from git+... mcp-obsidian`。
+通过 [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) 插件将 Obsidian 仓库暴露为 MCP server，供 Claude Desktop、Claude Code 等 MCP 客户端调用。
 
 ## 前置条件
 
-1. **Obsidian** 已安装并打开了你要操作的 Vault
-2. 在 Obsidian 里安装并启用社区插件 **Local REST API**
-   - 设置 → Community plugins → Browse → 搜 "Local REST API" → Install → Enable
-   - 启用后在插件设置里看到 **API Key**，记一下
-   - 默认地址：`http://127.0.0.1:27123`（HTTP）或 `https://127.0.0.1:27124`（HTTPS）
-3. **Python 3.12+** 和 [`uv`](https://github.com/astral-sh/uv)（推荐）
+- Obsidian 已启用 [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) 插件，记录其 API Key 与监听端口
+- [`uv`](https://github.com/astral-sh/uv)：`brew install uv` 或 `curl -LsSf https://astral.sh/uv/install.sh | sh`
 
-## 接入 MCP 客户端
+## 接入
 
-不需要 clone 仓库，`uv` 会自动从 GitHub 拉取并缓存。
-
-### Claude Desktop
-
-编辑 `~/Library/Application Support/Claude/claude_desktop_config.json`：
+**Claude Desktop** — 编辑 `~/Library/Application Support/Claude/claude_desktop_config.json`：
 
 ```json
 {
   "mcpServers": {
     "obsidian": {
       "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/Valen-akm/obsidian-mcp.git",
-        "mcp-obsidian"
-      ],
+      "args": ["--from", "git+https://github.com/Valen-akm/obsidian-mcp.git", "mcp-obsidian"],
       "env": {
-        "OBSIDIAN_API_KEY": "你的 API Key",
+        "OBSIDIAN_API_KEY": "...",
         "OBSIDIAN_HOST": "127.0.0.1",
-        "OBSIDIAN_PORT": "27300",
+        "OBSIDIAN_PORT": "27123",
         "OBSIDIAN_USE_HTTPS": "false"
       }
     }
@@ -70,75 +30,58 @@ git+https://github.com/Valen-akm/obsidian-mcp.git@<commit-sha>
 }
 ```
 
-改完重启 Claude Desktop。
-
-### Claude Code
+**Claude Code**：
 
 ```bash
 claude mcp add obsidian \
-  --env OBSIDIAN_API_KEY=你的key \
-  --env OBSIDIAN_HOST=127.0.0.1 \
-  --env OBSIDIAN_PORT=27300 \
-  --env OBSIDIAN_USE_HTTPS=false \
+  --env OBSIDIAN_API_KEY=... \
+  --env OBSIDIAN_PORT=27123 \
   -- uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian
 ```
 
-### 环境变量
+包从本仓库直接分发，未发布至 PyPI。`uvx` 首次运行时会缓存到 `~/.cache/uv/`。锁定版本：`git+...@v0.1.0` 或 `git+...@<sha>`；强制更新：`uvx --refresh ...`。
 
-| 变量 | 说明 | 默认 |
+## 环境变量
+
+| 变量 | 默认 | 说明 |
 |---|---|---|
-| `OBSIDIAN_API_KEY` | Local REST API 插件里的 key | `not-used-yet` |
-| `OBSIDIAN_HOST` | 主机 | `127.0.0.1` |
-| `OBSIDIAN_PORT` | 端口（看插件设置） | `27300` |
-| `OBSIDIAN_USE_HTTPS` | 是否走 HTTPS | `false` |
+| `OBSIDIAN_API_KEY` | — | 插件中的 API Key（必填） |
+| `OBSIDIAN_HOST` | `127.0.0.1` | 主机 |
+| `OBSIDIAN_PORT` | `27300` | 端口；插件默认 `27123`（HTTP）/ `27124`（HTTPS） |
+| `OBSIDIAN_USE_HTTPS` | `false` | 是否走 HTTPS |
 
-> ⚠️ 插件默认端口是 `27123`（HTTP）/ `27124`（HTTPS），按你实际监听的填。
-
-## 可用工具
+## 工具
 
 | 工具 | 说明 |
 |---|---|
 | `list_files(dir_path="")` | 列出 vault 或子目录下的 markdown 文件 |
 | `get_file(file_path)` | 读取笔记原文 |
-| `search_text(query, context_length=100)` | 全文搜索，返回匹配上下文 |
+| `search_text(query, context_length=100)` | 全文搜索 |
 | `search_dataview(dql)` | 执行 Dataview DQL 查询 |
-| `get_backlinks(file_path)` | 列出反向链接（谁引用了这篇） |
-| `get_outgoing_links(file_path)` | 列出这篇引用了谁 |
+| `get_backlinks(file_path)` | 反向链接 |
+| `get_outgoing_links(file_path)` | 外向链接 |
 | `list_tags()` | 列出所有标签及使用次数 |
 | `files_by_tag(tag)` | 按标签筛选文件 |
-| `append_note(file_path, content)` | 追加内容到笔记末尾（不存在则创建） |
-| `write_note(file_path, content)` | 创建或覆盖笔记 |
+| `append_note(file_path, content)` | 追加内容；文件不存在时创建 |
+| `write_note(file_path, content)` | 创建或覆盖 |
 
-所有 `file_path` 都是**相对于 vault 根目录**的路径，例如 `经验-跨域-2026-05-09.md` 或 `子目录/笔记.md`。
+所有 `file_path` 均相对于 vault 根目录。
 
 ## 本地开发
-
-想改代码：
 
 ```bash
 git clone https://github.com/Valen-akm/obsidian-mcp.git
 cd obsidian-mcp
 uv sync
-cp .env.example .env       # 然后编辑填入你的 API Key
-uv run mcp-obsidian        # 直接跑（stdio，会阻塞等 MCP 客户端连入）
+cp .env.example .env   # 填入 API Key
+uv run mcp-obsidian
 ```
 
-把 MCP 客户端的 `command` 临时改成 `uv` + `args` 指向本地路径，就能边改边试：
+将客户端配置切换至本地工作目录：
 
 ```json
-{
-  "command": "uv",
-  "args": ["--directory", "/绝对路径/到/obsidian-mcp", "run", "mcp-obsidian"]
-}
+{ "command": "uv", "args": ["--directory", "/abs/path/to/obsidian-mcp", "run", "mcp-obsidian"] }
 ```
-
-## 常见问题
-
-**连不上 / 403**：检查 `OBSIDIAN_API_KEY` 是不是插件里那一串，端口对不对。
-
-**HTTPS 报证书错误**：Local REST API 用的是自签名证书，本项目里 `httpx` 已经关掉了证书校验（`verify=False`），仅本地使用安全。
-
-**改完代码 Claude 没反应**：MCP server 由客户端拉起，改完代码要重启 Claude Desktop 或在 Claude Code 里 reload MCP server。如果用的是 `uvx --from git+...` 的方式，`uvx` 会缓存 git 版本，加 `--refresh` 或推 git 后重启即可。
 
 ## License
 

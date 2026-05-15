@@ -2,67 +2,27 @@
 
 **English** · [中文](./README.md)
 
-A Python implementation of an MCP (Model Context Protocol) server that exposes your Obsidian vault — via the [Obsidian Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin — to any MCP-compatible client (Claude Desktop, Claude Code, Cursor, etc.), letting an AI read and write your notes.
+MCP server that exposes an Obsidian vault to MCP clients (Claude Desktop, Claude Code, etc.) via the [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin.
 
-## Where the package comes from
+## Requirements
 
-This package is **distributed directly from this GitHub repo**. It is not on PyPI (yet).
+- Obsidian with the [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin enabled; note its API key and port
+- [`uv`](https://github.com/astral-sh/uv): `brew install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`
 
-All the client configs below invoke it via `uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian`. Under the hood, `uvx` will:
+## Configure
 
-1. Clone the repo into a cache location under `~/.cache/uv/` (only on first run; subsequent runs hit the cache)
-2. Create an ephemeral virtual environment and install the declared dependencies (`httpx`, `mcp[cli]`)
-3. Execute the registered entry point `mcp-obsidian` (= `mcp_obsidian.server:main`)
-
-**End users don't need to `git clone` anything** or run `pip install` manually — they just need [`uv`](https://github.com/astral-sh/uv):
-
-```bash
-# macOS
-brew install uv
-# or cross-platform
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-To pin to a specific version, append a git ref to the URL:
-
-```
-git+https://github.com/Valen-akm/obsidian-mcp.git@v0.1.0
-git+https://github.com/Valen-akm/obsidian-mcp.git@<commit-sha>
-```
-
-To force an update, add `--refresh`: `uvx --refresh --from git+... mcp-obsidian`.
-
-## Prerequisites
-
-1. **Obsidian** installed, with the vault you want to expose currently open.
-2. The **Local REST API** community plugin installed and enabled:
-   - Settings → Community plugins → Browse → search "Local REST API" → Install → Enable
-   - Note the **API Key** shown in the plugin settings
-   - Defaults to `http://127.0.0.1:27123` (HTTP) or `https://127.0.0.1:27124` (HTTPS)
-3. **Python 3.12+** and [`uv`](https://github.com/astral-sh/uv) (recommended)
-
-## Wire it into an MCP client
-
-No need to clone the repo — `uv` will fetch and cache from GitHub automatically.
-
-### Claude Desktop
-
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+**Claude Desktop** — edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "obsidian": {
       "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/Valen-akm/obsidian-mcp.git",
-        "mcp-obsidian"
-      ],
+      "args": ["--from", "git+https://github.com/Valen-akm/obsidian-mcp.git", "mcp-obsidian"],
       "env": {
-        "OBSIDIAN_API_KEY": "your-api-key",
+        "OBSIDIAN_API_KEY": "...",
         "OBSIDIAN_HOST": "127.0.0.1",
-        "OBSIDIAN_PORT": "27300",
+        "OBSIDIAN_PORT": "27123",
         "OBSIDIAN_USE_HTTPS": "false"
       }
     }
@@ -70,75 +30,58 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-Restart Claude Desktop.
-
-### Claude Code
+**Claude Code**:
 
 ```bash
 claude mcp add obsidian \
-  --env OBSIDIAN_API_KEY=your-key \
-  --env OBSIDIAN_HOST=127.0.0.1 \
-  --env OBSIDIAN_PORT=27300 \
-  --env OBSIDIAN_USE_HTTPS=false \
+  --env OBSIDIAN_API_KEY=... \
+  --env OBSIDIAN_PORT=27123 \
   -- uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian
 ```
 
-### Environment variables
+Distributed directly from this repository; not published to PyPI. `uvx` caches the build under `~/.cache/uv/` after the first run. Pin a version with `git+...@v0.1.0` or `git+...@<sha>`; force a refresh with `uvx --refresh ...`.
 
-| Variable | Description | Default |
+## Environment
+
+| Variable | Default | Notes |
 |---|---|---|
-| `OBSIDIAN_API_KEY` | API key from the Local REST API plugin | `not-used-yet` |
-| `OBSIDIAN_HOST` | Host | `127.0.0.1` |
-| `OBSIDIAN_PORT` | Port (check plugin settings) | `27300` |
-| `OBSIDIAN_USE_HTTPS` | Use HTTPS | `false` |
+| `OBSIDIAN_API_KEY` | — | Plugin API key (required) |
+| `OBSIDIAN_HOST` | `127.0.0.1` | Host |
+| `OBSIDIAN_PORT` | `27300` | Port; plugin defaults are `27123` (HTTP) / `27124` (HTTPS) |
+| `OBSIDIAN_USE_HTTPS` | `false` | Use HTTPS |
 
-> ⚠️ Plugin defaults are `27123` (HTTP) / `27124` (HTTPS). Match whatever it's actually listening on.
-
-## Available tools
+## Tools
 
 | Tool | Description |
 |---|---|
-| `list_files(dir_path="")` | List markdown files in the vault root or a subdirectory |
+| `list_files(dir_path="")` | List markdown files in the vault or a subdirectory |
 | `get_file(file_path)` | Read the raw markdown of a note |
-| `search_text(query, context_length=100)` | Full-text search, returns matches with surrounding context |
+| `search_text(query, context_length=100)` | Full-text search |
 | `search_dataview(dql)` | Run a Dataview DQL query |
-| `get_backlinks(file_path)` | List notes that link TO this note (incoming) |
-| `get_outgoing_links(file_path)` | List notes this note links TO (outgoing) |
-| `list_tags()` | List all tags with usage counts |
-| `files_by_tag(tag)` | List files carrying a given tag |
-| `append_note(file_path, content)` | Append to a note (creates the file if missing) |
-| `write_note(file_path, content)` | Create or overwrite a note |
+| `get_backlinks(file_path)` | Incoming links |
+| `get_outgoing_links(file_path)` | Outgoing links |
+| `list_tags()` | All tags with usage counts |
+| `files_by_tag(tag)` | Files carrying a given tag |
+| `append_note(file_path, content)` | Append content; creates the file if missing |
+| `write_note(file_path, content)` | Create or overwrite |
 
-All `file_path` values are **relative to the vault root**, e.g. `notes/cors-2026-05-09.md`.
+All `file_path` values are relative to the vault root.
 
-## Local development
-
-To hack on the code:
+## Development
 
 ```bash
 git clone https://github.com/Valen-akm/obsidian-mcp.git
 cd obsidian-mcp
 uv sync
-cp .env.example .env       # then fill in your API key
-uv run mcp-obsidian        # runs over stdio, blocks waiting for an MCP client
+cp .env.example .env   # fill in your API key
+uv run mcp-obsidian
 ```
 
-To point your MCP client at your local checkout for live editing:
+Point a client at the local checkout:
 
 ```json
-{
-  "command": "uv",
-  "args": ["--directory", "/absolute/path/to/obsidian-mcp", "run", "mcp-obsidian"]
-}
+{ "command": "uv", "args": ["--directory", "/abs/path/to/obsidian-mcp", "run", "mcp-obsidian"] }
 ```
-
-## Troubleshooting
-
-**Can't connect / 403**: check that `OBSIDIAN_API_KEY` matches the plugin and the port is right.
-
-**HTTPS certificate error**: Local REST API uses a self-signed cert. This project disables cert verification in `httpx` (`verify=False`) since traffic is local-only.
-
-**Changes not picked up by Claude**: the MCP server is launched by the client. After editing code, restart Claude Desktop or reload the MCP server in Claude Code. If you're using `uvx --from git+...`, `uvx` caches by git ref — add `--refresh` or push to git and restart.
 
 ## License
 
