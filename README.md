@@ -4,6 +4,34 @@
 
 一个用 Python 实现的 MCP（Model Context Protocol）server，把 Obsidian 仓库通过 [Obsidian Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) 插件暴露给任何兼容 MCP 的客户端（Claude Desktop、Claude Code、Cursor 等），让 AI 可以读写你的笔记。
 
+## 安装来源
+
+这个包**直接从 GitHub 分发**，目前还没发到 PyPI。
+
+下面所有客户端配置都用 `uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian` 这种形式调用 —— `uvx` 会自动：
+
+1. 把仓库 clone 到 `~/.cache/uv/` 下的临时位置（首次运行才下载，后续走缓存）
+2. 创建临时虚拟环境，按 `pyproject.toml` 装好 `httpx` / `mcp[cli]`
+3. 跑包里注册的 `mcp-obsidian` 入口（= `mcp_obsidian.server:main`）
+
+**用户不需要 `git clone` 这个仓库**，也不需要手动 `pip install`，只要装了 [`uv`](https://github.com/astral-sh/uv) 就行：
+
+```bash
+# macOS
+brew install uv
+# 或跨平台
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+想锁定到某个版本，把 URL 改成带 ref 的形式：
+
+```
+git+https://github.com/Valen-akm/obsidian-mcp.git@v0.1.0
+git+https://github.com/Valen-akm/obsidian-mcp.git@<commit-sha>
+```
+
+升级时，加 `--refresh` 让 `uvx` 重新拉一次：`uvx --refresh --from git+... mcp-obsidian`。
+
 ## 前置条件
 
 1. **Obsidian** 已安装并打开了你要操作的 Vault

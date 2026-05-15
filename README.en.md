@@ -4,6 +4,34 @@
 
 A Python implementation of an MCP (Model Context Protocol) server that exposes your Obsidian vault — via the [Obsidian Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin — to any MCP-compatible client (Claude Desktop, Claude Code, Cursor, etc.), letting an AI read and write your notes.
 
+## Where the package comes from
+
+This package is **distributed directly from this GitHub repo**. It is not on PyPI (yet).
+
+All the client configs below invoke it via `uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian`. Under the hood, `uvx` will:
+
+1. Clone the repo into a cache location under `~/.cache/uv/` (only on first run; subsequent runs hit the cache)
+2. Create an ephemeral virtual environment and install the declared dependencies (`httpx`, `mcp[cli]`)
+3. Execute the registered entry point `mcp-obsidian` (= `mcp_obsidian.server:main`)
+
+**End users don't need to `git clone` anything** or run `pip install` manually — they just need [`uv`](https://github.com/astral-sh/uv):
+
+```bash
+# macOS
+brew install uv
+# or cross-platform
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+To pin to a specific version, append a git ref to the URL:
+
+```
+git+https://github.com/Valen-akm/obsidian-mcp.git@v0.1.0
+git+https://github.com/Valen-akm/obsidian-mcp.git@<commit-sha>
+```
+
+To force an update, add `--refresh`: `uvx --refresh --from git+... mcp-obsidian`.
+
 ## Prerequisites
 
 1. **Obsidian** installed, with the vault you want to expose currently open.
