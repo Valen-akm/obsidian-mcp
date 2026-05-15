@@ -2,18 +2,34 @@
 
 [English](./README.en.md) · **中文**
 
-通过 [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) 插件将 Obsidian 仓库暴露为 MCP server，供 Claude Desktop、Claude Code 等 MCP 客户端调用。
+自带 Obsidian 桥接插件的 MCP server。一条命令装好插件，另一条命令拉起 server，供 Claude Desktop、Claude Code 等 MCP 客户端调用。无需第三方依赖。
 
 ## 前置条件
 
-- Obsidian 已启用 [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) 插件，记录其 API Key 与监听端口
+- Obsidian（≥ 1.5.0，桌面版）
 - [`uv`](https://github.com/astral-sh/uv)：`brew install uv` 或 `curl -LsSf https://astral.sh/uv/install.sh | sh`
+
+## 安装
+
+将 Tiwork Bridge 插件装进你的 Vault：
+
+```bash
+uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git \
+    mcp-obsidian-install /path/to/your/vault
+```
+
+然后在 Obsidian 中：
+
+1. 设置 → Community plugins，关闭 Restricted mode
+2. 在 Installed plugins 列表点刷新图标
+3. 启用 **Tiwork Bridge**
+4. 看到通知 `Tiwork bridge online: 127.0.0.1:27300` 即就绪
+
+重装或升级插件加 `--force` 覆盖。
 
 ## 启动
 
 ```bash
-OBSIDIAN_API_KEY=你的key \
-OBSIDIAN_PORT=27123 \
 uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian
 ```
 
@@ -26,13 +42,7 @@ uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian
   "mcpServers": {
     "obsidian": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/Valen-akm/obsidian-mcp.git", "mcp-obsidian"],
-      "env": {
-        "OBSIDIAN_API_KEY": "...",
-        "OBSIDIAN_HOST": "127.0.0.1",
-        "OBSIDIAN_PORT": "27123",
-        "OBSIDIAN_USE_HTTPS": "false"
-      }
+      "args": ["--from", "git+https://github.com/Valen-akm/obsidian-mcp.git", "mcp-obsidian"]
     }
   }
 }
@@ -41,21 +51,19 @@ uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian
 **Claude Code**：
 
 ```bash
-claude mcp add obsidian \
-  --env OBSIDIAN_API_KEY=... \
-  --env OBSIDIAN_PORT=27123 \
-  -- uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian
+claude mcp add obsidian -- uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian
 ```
 
-包从本仓库直接分发，未发布至 PyPI。`uvx` 首次运行时会缓存到 `~/.cache/uv/`。锁定版本：`git+...@v0.1.0` 或 `git+...@<sha>`；强制更新：`uvx --refresh ...`。
+包从本仓库直接分发，未发布至 PyPI。`uvx` 首次运行时会缓存至 `~/.cache/uv/`。锁定版本：`git+...@v0.1.0` 或 `git+...@<sha>`；强制更新：`uvx --refresh ...`。
 
 ## 环境变量
 
+仅在你修改了桥接插件默认监听地址时才需要：
+
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `OBSIDIAN_API_KEY` | — | 插件中的 API Key（必填） |
 | `OBSIDIAN_HOST` | `127.0.0.1` | 主机 |
-| `OBSIDIAN_PORT` | `27300` | 端口；插件默认 `27123`（HTTP）/ `27124`（HTTPS） |
+| `OBSIDIAN_PORT` | `27300` | 端口 |
 | `OBSIDIAN_USE_HTTPS` | `false` | 是否走 HTTPS |
 
 ## 工具
@@ -77,18 +85,27 @@ claude mcp add obsidian \
 
 ## 本地开发
 
+Python 端（MCP server）：
+
 ```bash
 git clone https://github.com/Valen-akm/obsidian-mcp.git
 cd obsidian-mcp
 uv sync
-cp .env.example .env   # 填入 API Key
 uv run mcp-obsidian
 ```
 
-将客户端配置切换至本地工作目录：
+将客户端 `command` 切换至本地：
 
 ```json
 { "command": "uv", "args": ["--directory", "/abs/path/to/obsidian-mcp", "run", "mcp-obsidian"] }
+```
+
+Bridge 插件（TypeScript）：
+
+```bash
+cd plugin-src
+npm install
+npm run build     # 产物输出到 main.js，需手动复制到 src/mcp_obsidian/plugin_dist/
 ```
 
 ## License

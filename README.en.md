@@ -2,18 +2,34 @@
 
 **English** · [中文](./README.md)
 
-MCP server that exposes an Obsidian vault to MCP clients (Claude Desktop, Claude Code, etc.) via the [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin.
+Self-contained MCP server for Obsidian. One command installs the bundled bridge plugin into your vault; another launches the server for Claude Desktop, Claude Code, and other MCP clients. No third-party plugins required.
 
 ## Requirements
 
-- Obsidian with the [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin enabled; note its API key and port
+- Obsidian (≥ 1.5.0, desktop)
 - [`uv`](https://github.com/astral-sh/uv): `brew install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`
+
+## Install
+
+Drop the Tiwork Bridge plugin into your vault:
+
+```bash
+uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git \
+    mcp-obsidian-install /path/to/your/vault
+```
+
+Then in Obsidian:
+
+1. Settings → Community plugins, turn off Restricted mode
+2. Click the refresh icon under Installed plugins
+3. Enable **Tiwork Bridge**
+4. You should see the notice `Tiwork bridge online: 127.0.0.1:27300`
+
+Add `--force` to overwrite an existing install.
 
 ## Run
 
 ```bash
-OBSIDIAN_API_KEY=your-key \
-OBSIDIAN_PORT=27123 \
 uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian
 ```
 
@@ -26,13 +42,7 @@ uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian
   "mcpServers": {
     "obsidian": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/Valen-akm/obsidian-mcp.git", "mcp-obsidian"],
-      "env": {
-        "OBSIDIAN_API_KEY": "...",
-        "OBSIDIAN_HOST": "127.0.0.1",
-        "OBSIDIAN_PORT": "27123",
-        "OBSIDIAN_USE_HTTPS": "false"
-      }
+      "args": ["--from", "git+https://github.com/Valen-akm/obsidian-mcp.git", "mcp-obsidian"]
     }
   }
 }
@@ -41,21 +51,19 @@ uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian
 **Claude Code**:
 
 ```bash
-claude mcp add obsidian \
-  --env OBSIDIAN_API_KEY=... \
-  --env OBSIDIAN_PORT=27123 \
-  -- uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian
+claude mcp add obsidian -- uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian
 ```
 
 Distributed directly from this repository; not published to PyPI. `uvx` caches the build under `~/.cache/uv/` after the first run. Pin a version with `git+...@v0.1.0` or `git+...@<sha>`; force a refresh with `uvx --refresh ...`.
 
 ## Environment
 
+Only needed if you've changed the bridge plugin's default listening address:
+
 | Variable | Default | Notes |
 |---|---|---|
-| `OBSIDIAN_API_KEY` | — | Plugin API key (required) |
 | `OBSIDIAN_HOST` | `127.0.0.1` | Host |
-| `OBSIDIAN_PORT` | `27300` | Port; plugin defaults are `27123` (HTTP) / `27124` (HTTPS) |
+| `OBSIDIAN_PORT` | `27300` | Port |
 | `OBSIDIAN_USE_HTTPS` | `false` | Use HTTPS |
 
 ## Tools
@@ -77,11 +85,12 @@ All `file_path` values are relative to the vault root.
 
 ## Development
 
+Python side (MCP server):
+
 ```bash
 git clone https://github.com/Valen-akm/obsidian-mcp.git
 cd obsidian-mcp
 uv sync
-cp .env.example .env   # fill in your API key
 uv run mcp-obsidian
 ```
 
@@ -89,6 +98,14 @@ Point a client at the local checkout:
 
 ```json
 { "command": "uv", "args": ["--directory", "/abs/path/to/obsidian-mcp", "run", "mcp-obsidian"] }
+```
+
+Bridge plugin (TypeScript):
+
+```bash
+cd plugin-src
+npm install
+npm run build     # emits main.js; copy it to src/mcp_obsidian/plugin_dist/
 ```
 
 ## License
