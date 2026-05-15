@@ -21,6 +21,7 @@ class ObsidianClient:
             headers={"Authorization": f"Bearer {api_key}"},
             verify=False,
             timeout=httpx.Timeout(15.0),
+            trust_env=False,
         )
 
     async def aclose(self) -> None:

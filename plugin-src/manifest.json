@@ -1,0 +1,9 @@
+{
+	"id": "obsidian-tiwork-bridge",
+	"name": "Tiwork Bridge",
+	"version": "0.1.0",
+	"minAppVersion": "1.5.0",
+	"description": "Local HTTP bridge exposing minimal Obsidian APIs (read/write/search/backlinks/tags) for the obsidian-mcp server.",
+	"author": "Valen-akm",
+	"isDesktopOnly": true
+}
