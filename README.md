@@ -1,5 +1,7 @@
 # mcp-obsidian
 
+[English](./README.en.md) · **中文**
+
 一个用 Python 实现的 MCP（Model Context Protocol）server，把 Obsidian 仓库通过 [Obsidian Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) 插件暴露给任何兼容 MCP 的客户端（Claude Desktop、Claude Code、Cursor 等），让 AI 可以读写你的笔记。
 
 ## 前置条件
