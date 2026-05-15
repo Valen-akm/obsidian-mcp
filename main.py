@@ -6,7 +6,7 @@ from mcp.server.fastmcp import FastMCP
 
 from obsidian_client import from_env
 
-mcp = FastMCP("obsidian-tiwork")
+mcp = FastMCP("obsidian")
 _client = None
 
 
