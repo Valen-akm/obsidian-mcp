@@ -9,6 +9,20 @@
 - Obsidian 已启用 [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) 插件，记录其 API Key 与监听端口
 - [`uv`](https://github.com/astral-sh/uv)：`brew install uv` 或 `curl -LsSf https://astral.sh/uv/install.sh | sh`
 
+## 快速启动
+
+无需 clone 仓库，一行命令直接拉起 server：
+
+```bash
+OBSIDIAN_API_KEY=你的key \
+OBSIDIAN_HOST=127.0.0.1 \
+OBSIDIAN_PORT=27123 \
+OBSIDIAN_USE_HTTPS=false \
+uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian
+```
+
+首次运行 `uvx` 会拉取仓库并安装依赖，之后走缓存。MCP server 通过 stdio 通信，进程会**阻塞**等待客户端连入 —— 这是正常状态，按 `Ctrl+C` 退出。该命令主要用于验证安装可用；日常使用走下面的客户端配置。
+
 ## 接入
 
 **Claude Desktop** — 编辑 `~/Library/Application Support/Claude/claude_desktop_config.json`：

@@ -9,6 +9,20 @@ MCP server that exposes an Obsidian vault to MCP clients (Claude Desktop, Claude
 - Obsidian with the [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin enabled; note its API key and port
 - [`uv`](https://github.com/astral-sh/uv): `brew install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`
 
+## Quick start
+
+No clone needed — launch the server with a single command:
+
+```bash
+OBSIDIAN_API_KEY=your-key \
+OBSIDIAN_HOST=127.0.0.1 \
+OBSIDIAN_PORT=27123 \
+OBSIDIAN_USE_HTTPS=false \
+uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian
+```
+
+On first run, `uvx` fetches the repo and installs deps; later runs use the cache. The MCP server speaks stdio, so the process will **block** waiting for a client to connect — that's expected; `Ctrl+C` to exit. Use this mainly to verify the install works; for daily use, wire it into a client as shown below.
+
 ## Configure
 
 **Claude Desktop** — edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
