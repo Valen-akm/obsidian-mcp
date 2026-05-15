@@ -4,7 +4,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from obsidian_client import from_env
+from .client import from_env
 
 mcp = FastMCP("obsidian")
 _client = None
@@ -79,5 +79,9 @@ async def write_note(file_path: str, content: str) -> str:
     return f"Wrote {file_path}"
 
 
-if __name__ == "__main__":
+def main() -> None:
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()
