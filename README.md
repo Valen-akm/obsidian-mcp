@@ -11,7 +11,7 @@
 
 ## 安装
 
-将 Tiwork Bridge 插件装进你的 Vault：
+将 MCP Bridge 插件装进你的 Vault：
 
 ```bash
 uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git \
@@ -22,8 +22,8 @@ uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git \
 
 1. 设置 → Community plugins，关闭 Restricted mode
 2. 在 Installed plugins 列表点刷新图标
-3. 启用 **Tiwork Bridge**
-4. 看到通知 `Tiwork bridge online: 127.0.0.1:27300` 即就绪
+3. 启用 **MCP Bridge**
+4. 看到通知 `MCP bridge online: 127.0.0.1:27300` 即就绪
 
 重装或升级插件加 `--force` 覆盖。
 

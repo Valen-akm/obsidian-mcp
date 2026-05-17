@@ -1,5 +1,5 @@
 {
-	"name": "obsidian-tiwork-bridge",
+	"name": "obsidian-mcp-bridge",
 	"version": "0.1.0",
 	"description": "Local HTTP bridge for Obsidian → obsidian-mcp",
 	"main": "main.js",

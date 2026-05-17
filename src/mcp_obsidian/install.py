@@ -6,13 +6,13 @@ import sys
 from importlib import resources
 from pathlib import Path
 
-PLUGIN_ID = "obsidian-tiwork-bridge"
+PLUGIN_ID = "obsidian-mcp-bridge"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="mcp-obsidian-install",
-        description="Install the Tiwork Bridge plugin into an Obsidian vault.",
+        description="Install the MCP Bridge plugin into an Obsidian vault.",
     )
     parser.add_argument(
         "vault",
@@ -60,8 +60,8 @@ def main() -> None:
     print("  1. Open Obsidian → Settings → Community plugins")
     print("  2. Make sure Restricted mode is OFF")
     print("  3. Click the refresh icon next to 'Installed plugins'")
-    print("  4. Toggle 'Tiwork Bridge' ON")
-    print("  5. You should see a notice: 'Tiwork bridge online: 127.0.0.1:27300'")
+    print("  4. Toggle 'MCP Bridge' ON")
+    print("  5. You should see a notice: 'MCP bridge online: 127.0.0.1:27300'")
     print()
     print("Then start the MCP server with:")
     print("  uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git mcp-obsidian")

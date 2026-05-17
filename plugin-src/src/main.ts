@@ -4,18 +4,18 @@ import http from "http";
 const DEFAULT_PORT = 27300;
 const HOST = "127.0.0.1";
 
-export default class TiworkBridge extends Plugin {
+export default class McpBridge extends Plugin {
 	private server: http.Server | null = null;
 
 	async onload() {
 		this.server = http.createServer((req, res) => this.route(req, res));
 		this.server.on("error", (err) => {
-			console.error("[tiwork-bridge] server error", err);
-			new Notice(`Tiwork bridge failed: ${err.message}`);
+			console.error("[mcp-bridge] server error", err);
+			new Notice(`MCP bridge failed: ${err.message}`);
 		});
 		this.server.listen(DEFAULT_PORT, HOST, () => {
-			console.log(`[tiwork-bridge] listening on http://${HOST}:${DEFAULT_PORT}`);
-			new Notice(`Tiwork bridge online: ${HOST}:${DEFAULT_PORT}`);
+			console.log(`[mcp-bridge] listening on http://${HOST}:${DEFAULT_PORT}`);
+			new Notice(`MCP bridge online: ${HOST}:${DEFAULT_PORT}`);
 		});
 	}
 
@@ -33,7 +33,7 @@ export default class TiworkBridge extends Plugin {
 			const method = req.method ?? "GET";
 
 			if (method === "GET" && path === "/") {
-				return json(res, { service: "obsidian-tiwork-bridge", version: "0.1.0" });
+				return json(res, { service: "obsidian-mcp-bridge", version: "0.1.0" });
 			}
 
 			if (method === "GET" && path === "/vault/") {
@@ -109,7 +109,7 @@ export default class TiworkBridge extends Plugin {
 
 			return text(res, 404, `no route: ${method} ${path}`);
 		} catch (err: any) {
-			console.error("[tiwork-bridge] handler error", err);
+			console.error("[mcp-bridge] handler error", err);
 			return text(res, 500, err?.message ?? "internal error");
 		}
 	}

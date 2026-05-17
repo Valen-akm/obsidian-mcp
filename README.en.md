@@ -11,7 +11,7 @@ Self-contained MCP server for Obsidian. One command installs the bundled bridge 
 
 ## Install
 
-Drop the Tiwork Bridge plugin into your vault:
+Drop the MCP Bridge plugin into your vault:
 
 ```bash
 uvx --from git+https://github.com/Valen-akm/obsidian-mcp.git \
@@ -22,8 +22,8 @@ Then in Obsidian:
 
 1. Settings → Community plugins, turn off Restricted mode
 2. Click the refresh icon under Installed plugins
-3. Enable **Tiwork Bridge**
-4. You should see the notice `Tiwork bridge online: 127.0.0.1:27300`
+3. Enable **MCP Bridge**
+4. You should see the notice `MCP bridge online: 127.0.0.1:27300`
 
 Add `--force` to overwrite an existing install.
 
