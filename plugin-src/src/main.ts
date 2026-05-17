@@ -94,6 +94,13 @@ export default class McpBridge extends Plugin {
 				return json(res, { target, files: sources });
 			}
 
+			if (method === "GET" && path.startsWith("/links/")) {
+				const source = decodePath(path.slice("/links/".length).replace(/\/$/, ""));
+				const resolved = this.app.metadataCache.resolvedLinks;
+				const files = resolved[source] ? Object.keys(resolved[source]) : [];
+				return json(res, { source, files });
+			}
+
 			if (method === "POST" && path === "/search/simple/") {
 				const query = url.searchParams.get("query") ?? "";
 				if (!query) return json(res, []);
