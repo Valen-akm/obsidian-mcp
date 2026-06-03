@@ -96,6 +96,13 @@ class ObsidianClient:
         resp = await self._get(f"/links/{file_path.lstrip('/')}/")
         return resp.json().get("files", [])
 
+    async def neighborhood(
+        self, file_path: str, depth: int = 2, include_backlinks: bool = True
+    ) -> dict[str, Any]:
+        params = {"depth": str(depth), "backlinks": "true" if include_backlinks else "false"}
+        resp = await self._get(f"/neighborhood/{file_path.lstrip('/')}/", params=params)
+        return resp.json()
+
     async def index(self, dir: str = "") -> dict[str, Any]:
         params = {"dir": dir} if dir else None
         resp = await self._get("/index/", params=params)

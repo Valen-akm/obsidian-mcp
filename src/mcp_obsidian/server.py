@@ -37,7 +37,7 @@ async def search_text(query: str, context_length: int = 100) -> list[dict[str, A
 
 @mcp.tool()
 async def get_backlinks(file_path: str) -> list[dict[str, Any]]:
-    """List notes that link TO the given note (incoming references). Each entry is {path, title, tags} so you can judge relevance without fetching every note. Path is relative to vault root."""
+    """List notes that link TO the given note (incoming references). Each entry is {path, title, tags, context} — `context` is the sentence the link sits in, so you can see HOW the note is referenced without opening the source. Path is relative to vault root."""
     return await client().backlinks(file_path)
 
 
@@ -45,6 +45,14 @@ async def get_backlinks(file_path: str) -> list[dict[str, Any]]:
 async def get_outgoing_links(file_path: str) -> list[dict[str, Any]]:
     """List notes that the given note links TO (outgoing references). Each entry is {path, title, tags} so you can judge relevance without fetching every note."""
     return await client().outgoing_links(file_path)
+
+
+@mcp.tool()
+async def get_neighborhood(
+    file_path: str, depth: int = 2, include_backlinks: bool = True
+) -> dict[str, Any]:
+    """Walk the link graph outward from a note up to `depth` hops in ONE call — no manual BFS, no N+1. Returns {root, depth, includeBacklinks, nodes, edges}: 'nodes' are {path,title,tags} for every note reached; 'edges' are {from,to,refCount} directed links. With include_backlinks (default true) it follows links in BOTH directions, so you also discover notes that reference this one. Use to map a topic's neighborhood; for a single hop use get_outgoing_links/get_backlinks. depth is capped at 4."""
+    return await client().neighborhood(file_path, depth, include_backlinks)
 
 
 @mcp.tool()

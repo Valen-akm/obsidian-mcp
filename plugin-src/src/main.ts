@@ -42,6 +42,29 @@ export default class McpBridge extends Plugin {
 		return { path: p, title: h1?.heading ?? f.basename, tags };
 	}
 
+	// A backlink entry enriched with the sentence the link sits in — the most
+	// useful half of Obsidian's backlink panel: not just WHO links here, but HOW.
+	private async backlinkEntry(
+		src: string,
+		target: string
+	): Promise<{ path: string; title: string; tags: string[]; context: string }> {
+		const brief = this.noteBrief(src);
+		const f = this.app.vault.getAbstractFileByPath(src);
+		if (!(f instanceof TFile)) return { ...brief, context: "" };
+		const cache = this.app.metadataCache.getFileCache(f);
+		const link = (cache?.links ?? []).find((l) => {
+			const base = l.link.split("|")[0].split("#")[0];
+			const dest = this.app.metadataCache.getFirstLinkpathDest(base, src);
+			return dest?.path === target;
+		});
+		if (!link?.position) return { ...brief, context: "" };
+		const content = await this.app.vault.cachedRead(f);
+		const s = Math.max(0, link.position.start.offset - 60);
+		const e = Math.min(content.length, link.position.end.offset + 60);
+		const context = content.slice(s, e).replace(/\s+/g, " ").trim();
+		return { ...brief, context };
+	}
+
 	private async route(req: http.IncomingMessage, res: http.ServerResponse) {
 		try {
 			const url = new URL(req.url ?? "/", `http://${HOST}`);
@@ -148,7 +171,11 @@ export default class McpBridge extends Plugin {
 						sources.push(source);
 					}
 				}
-				return json(res, { target, files: sources.map((p) => this.noteBrief(p)) });
+				const files = [];
+				for (const src of sources) {
+					files.push(await this.backlinkEntry(src, target));
+				}
+				return json(res, { target, files });
 			}
 
 			if (method === "GET" && path.startsWith("/links/")) {
@@ -156,6 +183,69 @@ export default class McpBridge extends Plugin {
 				const resolved = this.app.metadataCache.resolvedLinks;
 				const files = resolved[source] ? Object.keys(resolved[source]) : [];
 				return json(res, { source, files: files.map((p) => this.noteBrief(p)) });
+			}
+
+			if (method === "GET" && path.startsWith("/neighborhood/")) {
+				// Breadth-first walk out from `root` up to `depth` hops, returning the
+				// whole subgraph in one call so callers don't have to hand-roll a BFS
+				// (the N+1 trap with get_outgoing_links). With backlinks=true (default)
+				// it follows links in BOTH directions, so you also reach notes that
+				// reference the root, not just the ones it points at.
+				const root = decodePath(path.slice("/neighborhood/".length).replace(/\/$/, ""));
+				const depth = Math.min(
+					Math.max(parseInt(url.searchParams.get("depth") ?? "2", 10) || 2, 1),
+					4
+				);
+				const includeBack = url.searchParams.get("backlinks") !== "false";
+				const resolved = this.app.metadataCache.resolvedLinks;
+				const backAdj: Record<string, string[]> = {};
+				if (includeBack) {
+					for (const src of Object.keys(resolved)) {
+						for (const tgt of Object.keys(resolved[src])) {
+							if (tgt !== src) (backAdj[tgt] ??= []).push(src);
+						}
+					}
+				}
+				const nodeSet = new Set<string>([root]);
+				const edgeSeen = new Set<string>();
+				const edges: Array<{ from: string; to: string; refCount: number }> = [];
+				const visited = new Set<string>([root]);
+				let frontier = [root];
+				for (let d = 0; d < depth; d++) {
+					const next: string[] = [];
+					for (const cur of frontier) {
+						for (const [tgt, n] of Object.entries(resolved[cur] ?? {})) {
+							if (tgt === cur) continue;
+							const key = `${cur} ${tgt}`;
+							if (!edgeSeen.has(key)) {
+								edgeSeen.add(key);
+								edges.push({ from: cur, to: tgt, refCount: n });
+							}
+							nodeSet.add(tgt);
+							if (!visited.has(tgt)) {
+								visited.add(tgt);
+								next.push(tgt);
+							}
+						}
+						if (includeBack) {
+							for (const src of backAdj[cur] ?? []) {
+								const key = `${src} ${cur}`;
+								if (!edgeSeen.has(key)) {
+									edgeSeen.add(key);
+									edges.push({ from: src, to: cur, refCount: resolved[src][cur] });
+								}
+								nodeSet.add(src);
+								if (!visited.has(src)) {
+									visited.add(src);
+									next.push(src);
+								}
+							}
+						}
+					}
+					frontier = next;
+				}
+				const nodes = Array.from(nodeSet).map((p) => this.noteBrief(p));
+				return json(res, { root, depth, includeBacklinks: includeBack, nodes, edges });
 			}
 
 			if (method === "GET" && path === "/graph/") {
