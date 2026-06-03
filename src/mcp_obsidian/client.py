@@ -46,9 +46,10 @@ class ObsidianClient:
         resp = await self._get("/")
         return resp.json()
 
-    async def list_files(self, dir_path: str = "") -> list[str]:
+    async def list_files(self, dir_path: str = "", include_non_md: bool = False) -> list[str]:
         path = f"/vault/{dir_path.lstrip('/')}" if dir_path else "/vault/"
-        resp = await self._get(path)
+        params = {"all": "true"} if include_non_md else None
+        resp = await self._get(path, params=params)
         return resp.json().get("files", [])
 
     async def get_file(self, file_path: str) -> str:
@@ -79,14 +80,6 @@ class ObsidianClient:
         )
         return resp.json()
 
-    async def search_dataview(self, dql: str) -> list[dict[str, Any]]:
-        resp = await self._post(
-            "/search/",
-            content=dql,
-            headers={"Content-Type": "application/vnd.olrapi.dataview.dql+txt"},
-        )
-        return resp.json()
-
     async def list_tags(self) -> list[dict[str, Any]]:
         resp = await self._get("/tags/")
         return resp.json()
@@ -102,6 +95,25 @@ class ObsidianClient:
     async def outgoing_links(self, file_path: str) -> list[str]:
         resp = await self._get(f"/links/{file_path.lstrip('/')}/")
         return resp.json().get("files", [])
+
+    async def index(self) -> list[dict[str, Any]]:
+        resp = await self._get("/index/")
+        return resp.json()
+
+    async def graph(self) -> dict[str, Any]:
+        resp = await self._get("/graph/")
+        return resp.json()
+
+    async def metadata(self, file_path: str) -> dict[str, Any]:
+        resp = await self._get(f"/metadata/{file_path.lstrip('/')}")
+        return resp.json()
+
+    async def rename(self, from_path: str, to_path: str) -> dict[str, Any]:
+        resp = await self._post(
+            "/rename/",
+            json={"from": from_path.lstrip("/"), "to": to_path.lstrip("/")},
+        )
+        return resp.json()
 
     async def active_note(self) -> dict[str, Any]:
         resp = await self._get("/active/")
