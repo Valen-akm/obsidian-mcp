@@ -42,11 +42,20 @@ export default class McpBridge extends Plugin {
 			}
 
 			if (method === "GET" && path.startsWith("/vault/")) {
-				const filePath = decodePath(path.slice("/vault/".length));
-				const file = this.app.vault.getAbstractFileByPath(filePath);
-				if (!(file instanceof TFile)) return text(res, 404, `not found: ${filePath}`);
-				const content = await this.app.vault.read(file);
-				return text(res, 200, content, "text/markdown");
+				const sub = decodePath(path.slice("/vault/".length)).replace(/\/$/, "");
+				const file = this.app.vault.getAbstractFileByPath(sub);
+				if (file instanceof TFile) {
+					const content = await this.app.vault.read(file);
+					return text(res, 200, content, "text/markdown");
+				}
+				// Not a file: callers asking for markdown want a 404; otherwise list the folder.
+				const wantsMarkdown = (req.headers["accept"] ?? "").includes("text/markdown");
+				if (wantsMarkdown) return text(res, 404, `not found: ${sub}`);
+				const prefix = sub ? `${sub}/` : "";
+				const all = url.searchParams.get("all") === "true";
+				const source = all ? this.app.vault.getFiles() : this.app.vault.getMarkdownFiles();
+				const files = source.map((f) => f.path).filter((p) => p.startsWith(prefix));
+				return json(res, { files });
 			}
 
 			if (method === "POST" && path.startsWith("/vault/")) {
@@ -76,10 +85,40 @@ export default class McpBridge extends Plugin {
 				return json(res, { ok: true, path: filePath });
 			}
 
+			if (method === "POST" && path === "/rename/") {
+				const body = await readBody(req);
+				let payload: { from?: string; to?: string };
+				try {
+					payload = JSON.parse(body);
+				} catch {
+					return text(res, 400, "invalid JSON body");
+				}
+				const from = (payload.from ?? "").replace(/^\/+/, "");
+				const to = (payload.to ?? "").replace(/^\/+/, "");
+				if (!from || !to) return text(res, 400, "both 'from' and 'to' are required");
+				const file = this.app.vault.getAbstractFileByPath(from);
+				if (!(file instanceof TFile)) return text(res, 404, `not found: ${from}`);
+				if (this.app.vault.getAbstractFileByPath(to)) {
+					return text(res, 409, `target already exists: ${to}`);
+				}
+				await ensureFolder(this.app, to);
+				await this.app.fileManager.renameFile(file, to);
+				return json(res, { ok: true, from, to });
+			}
+
 			if (method === "GET" && path === "/tags/") {
 				const raw = (this.app.metadataCache as any).getTags?.() ?? {};
 				const tags = Object.entries(raw).map(([tag, count]) => ({ tag, count }));
 				return json(res, tags);
+			}
+
+			if (method === "GET" && path.startsWith("/tags/")) {
+				const tag = decodePath(path.slice("/tags/".length).replace(/\/$/, "")).replace(/^#/, "");
+				const files: string[] = [];
+				for (const file of this.app.vault.getMarkdownFiles()) {
+					if (fileHasTag(this.app, file, tag)) files.push(file.path);
+				}
+				return json(res, files.map((p) => ({ path: p })));
 			}
 
 			if (method === "GET" && path.startsWith("/backlinks/")) {
@@ -101,16 +140,81 @@ export default class McpBridge extends Plugin {
 				return json(res, { source, files });
 			}
 
+			if (method === "GET" && path === "/graph/") {
+				const mc = this.app.metadataCache as any;
+				return json(res, {
+					resolved: mc.resolvedLinks ?? {},
+					unresolved: mc.unresolvedLinks ?? {},
+				});
+			}
+
+			if (method === "GET" && path === "/index/") {
+				const resolved = this.app.metadataCache.resolvedLinks;
+				const backCount: Record<string, number> = {};
+				for (const src of Object.keys(resolved)) {
+					for (const tgt of Object.keys(resolved[src])) {
+						backCount[tgt] = (backCount[tgt] ?? 0) + 1;
+					}
+				}
+				const items = this.app.vault.getMarkdownFiles().map((f) => {
+					const cache = this.app.metadataCache.getFileCache(f) ?? {};
+					const fm = cache.frontmatter ?? {};
+					const inlineTags = (cache.tags ?? []).map((t) => t.tag.replace(/^#/, ""));
+					const fmTags = normalizeTags((fm as any).tags);
+					const tags = Array.from(new Set([...fmTags, ...inlineTags]));
+					const h1 = (cache.headings ?? []).find((h) => h.level === 1);
+					const slash = f.path.lastIndexOf("/");
+					return {
+						path: f.path,
+						title: h1?.heading ?? f.basename,
+						tags,
+						frontmatter: fm,
+						mtime: f.stat.mtime,
+						dir: slash >= 0 ? f.path.slice(0, slash) : "",
+						nOut: resolved[f.path] ? Object.keys(resolved[f.path]).length : 0,
+						nBack: backCount[f.path] ?? 0,
+					};
+				});
+				return json(res, items);
+			}
+
+			if (method === "GET" && path.startsWith("/metadata/")) {
+				const fp = decodePath(path.slice("/metadata/".length).replace(/\/$/, ""));
+				const file = this.app.vault.getAbstractFileByPath(fp);
+				if (!(file instanceof TFile)) return text(res, 404, `not found: ${fp}`);
+				const cache = this.app.metadataCache.getFileCache(file) ?? {};
+				return json(res, {
+					path: fp,
+					frontmatter: cache.frontmatter ?? {},
+					tags: (cache.tags ?? []).map((t) => t.tag.replace(/^#/, "")),
+					headings: (cache.headings ?? []).map((h) => ({ heading: h.heading, level: h.level })),
+					links: (cache.links ?? []).map((l) => l.link),
+					embeds: (cache.embeds ?? []).map((e) => e.link),
+				});
+			}
+
 			if (method === "POST" && path === "/search/simple/") {
 				const query = url.searchParams.get("query") ?? "";
 				if (!query) return json(res, []);
-				const results: Array<{ filename: string; score: number }> = [];
+				const ctxLen = parseInt(url.searchParams.get("contextLength") ?? "100", 10);
+				const q = query.toLowerCase();
+				const results: Array<{ filename: string; score: number; context: string }> = [];
 				for (const file of this.app.vault.getMarkdownFiles()) {
 					const content = await this.app.vault.cachedRead(file);
-					if (content.toLowerCase().includes(query.toLowerCase())) {
-						results.push({ filename: file.path, score: 1 });
+					const idx = content.toLowerCase().indexOf(q);
+					const titleHit = file.basename.toLowerCase().includes(q);
+					const cache = this.app.metadataCache.getFileCache(file);
+					const tagHit = (cache?.tags ?? []).some((t) => t.tag.toLowerCase().includes(q));
+					if (idx < 0 && !titleHit && !tagHit) continue;
+					let context = "";
+					if (idx >= 0) {
+						const start = Math.max(0, idx - Math.floor(ctxLen / 2));
+						context = content.slice(start, idx + query.length + Math.floor(ctxLen / 2));
 					}
+					const score = (idx >= 0 ? 1 : 0) + (titleHit ? 1 : 0) + (tagHit ? 1 : 0);
+					results.push({ filename: file.path, score, context });
 				}
+				results.sort((a, b) => b.score - a.score);
 				return json(res, results);
 			}
 
@@ -143,6 +247,24 @@ async function readBody(req: http.IncomingMessage): Promise<string> {
 		req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
 		req.on("error", reject);
 	});
+}
+
+function normalizeTags(value: unknown): string[] {
+	if (!value) return [];
+	const list = Array.isArray(value) ? value : String(value).split(/[,\s]+/);
+	return list.map((t) => String(t).replace(/^#/, "")).filter(Boolean);
+}
+
+function tagMatches(candidate: string, query: string): boolean {
+	return candidate === query || candidate.startsWith(`${query}/`);
+}
+
+function fileHasTag(app: any, file: TFile, query: string): boolean {
+	const cache = app.metadataCache.getFileCache(file);
+	if (!cache) return false;
+	const inline = (cache.tags ?? []).some((t: any) => tagMatches(t.tag.replace(/^#/, ""), query));
+	const fm = normalizeTags(cache.frontmatter?.tags).some((t) => tagMatches(t, query));
+	return inline || fm;
 }
 
 async function ensureFolder(app: any, filePath: string): Promise<void> {
