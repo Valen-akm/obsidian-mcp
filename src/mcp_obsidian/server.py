@@ -36,14 +36,14 @@ async def search_text(query: str, context_length: int = 100) -> list[dict[str, A
 
 
 @mcp.tool()
-async def get_backlinks(file_path: str) -> list[str]:
-    """List notes that link TO the given note (incoming references). Path is relative to vault root."""
+async def get_backlinks(file_path: str) -> list[dict[str, Any]]:
+    """List notes that link TO the given note (incoming references). Each entry is {path, title, tags} so you can judge relevance without fetching every note. Path is relative to vault root."""
     return await client().backlinks(file_path)
 
 
 @mcp.tool()
-async def get_outgoing_links(file_path: str) -> list[str]:
-    """List notes that the given note links TO (outgoing references)."""
+async def get_outgoing_links(file_path: str) -> list[dict[str, Any]]:
+    """List notes that the given note links TO (outgoing references). Each entry is {path, title, tags} so you can judge relevance without fetching every note."""
     return await client().outgoing_links(file_path)
 
 
@@ -66,9 +66,9 @@ async def get_index(dir: str = "") -> dict[str, Any]:
 
 
 @mcp.tool()
-async def get_graph() -> dict[str, Any]:
-    """Return the entire vault link graph in one call. 'resolved' is a weighted adjacency map {source: {target: refCount}}; 'unresolved' lists links pointing at notes that don't exist yet (broken/planned links). Use for multi-hop traversal, finding hubs, or spotting orphans without querying each note."""
-    return await client().graph()
+async def get_graph(dir: str = "") -> dict[str, Any]:
+    """Return the vault link graph as a cleaned adjacency map. Returns {dir, resolved, unresolved}: 'resolved' is {source: {target: refCount}} weighted edges; 'unresolved' is links pointing at notes that don't exist yet (broken/planned). Only sources WITH edges are included — empty nodes and self-links are dropped — so the graph stays legible. Pass dir="" for the whole graph, or a subdir path (e.g. "api.tiwork.ai/notes/otel") to get just that subtree's edges. Use for multi-hop traversal or finding hubs; for a single note's neighbors use get_backlinks/get_outgoing_links."""
+    return await client().graph(dir)
 
 
 @mcp.tool()

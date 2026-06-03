@@ -88,11 +88,11 @@ class ObsidianClient:
         resp = await self._get(f"/tags/{tag.lstrip('#')}/")
         return resp.json()
 
-    async def backlinks(self, file_path: str) -> list[str]:
+    async def backlinks(self, file_path: str) -> list[dict[str, Any]]:
         resp = await self._get(f"/backlinks/{file_path.lstrip('/')}/")
         return resp.json().get("files", [])
 
-    async def outgoing_links(self, file_path: str) -> list[str]:
+    async def outgoing_links(self, file_path: str) -> list[dict[str, Any]]:
         resp = await self._get(f"/links/{file_path.lstrip('/')}/")
         return resp.json().get("files", [])
 
@@ -101,8 +101,9 @@ class ObsidianClient:
         resp = await self._get("/index/", params=params)
         return resp.json()
 
-    async def graph(self) -> dict[str, Any]:
-        resp = await self._get("/graph/")
+    async def graph(self, dir: str = "") -> dict[str, Any]:
+        params = {"dir": dir} if dir else None
+        resp = await self._get("/graph/", params=params)
         return resp.json()
 
     async def metadata(self, file_path: str) -> dict[str, Any]:

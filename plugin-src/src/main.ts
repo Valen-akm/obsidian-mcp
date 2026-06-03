@@ -26,6 +26,22 @@ export default class McpBridge extends Plugin {
 		}
 	}
 
+	// A one-line summary of a note for link lists: callers shouldn't have to fetch
+	// each path just to learn its title/tags. Falls back to the path if the file
+	// is missing (e.g. a link target that was since deleted).
+	private noteBrief(p: string): { path: string; title: string; tags: string[] } {
+		const f = this.app.vault.getAbstractFileByPath(p);
+		if (!(f instanceof TFile)) return { path: p, title: p, tags: [] };
+		const cache = this.app.metadataCache.getFileCache(f) ?? {};
+		const h1 = (cache.headings ?? []).find((h) => h.level === 1);
+		const inlineTags = (cache.tags ?? []).map((t) => t.tag.replace(/^#/, ""));
+		const fmTags = normalizeTags((cache.frontmatter as any)?.tags);
+		const tags = Array.from(new Set([...fmTags, ...inlineTags])).filter(
+			(t) => !isHexColorTag(t)
+		);
+		return { path: p, title: h1?.heading ?? f.basename, tags };
+	}
+
 	private async route(req: http.IncomingMessage, res: http.ServerResponse) {
 		try {
 			const url = new URL(req.url ?? "/", `http://${HOST}`);
@@ -132,21 +148,40 @@ export default class McpBridge extends Plugin {
 						sources.push(source);
 					}
 				}
-				return json(res, { target, files: sources });
+				return json(res, { target, files: sources.map((p) => this.noteBrief(p)) });
 			}
 
 			if (method === "GET" && path.startsWith("/links/")) {
 				const source = decodePath(path.slice("/links/".length).replace(/\/$/, ""));
 				const resolved = this.app.metadataCache.resolvedLinks;
 				const files = resolved[source] ? Object.keys(resolved[source]) : [];
-				return json(res, { source, files });
+				return json(res, { source, files: files.map((p) => this.noteBrief(p)) });
 			}
 
 			if (method === "GET" && path === "/graph/") {
+				// Obsidian's raw link maps list EVERY note as a key (most with no edges)
+				// and include self-links, which makes the graph hard to read. Clean it:
+				// keep only sources inside `dir`, drop self-links, and omit nodes that
+				// have no edges left. dir="" returns the whole (cleaned) graph.
+				const dir = (url.searchParams.get("dir") ?? "").replace(/^\/+|\/+$/g, "");
+				const prefix = dir ? `${dir}/` : "";
 				const mc = this.app.metadataCache as any;
+				const clean = (raw: Record<string, Record<string, number>>) => {
+					const out: Record<string, Record<string, number>> = {};
+					for (const src of Object.keys(raw ?? {})) {
+						if (prefix && !src.startsWith(prefix)) continue;
+						const edges: Record<string, number> = {};
+						for (const [tgt, n] of Object.entries(raw[src])) {
+							if (tgt !== src) edges[tgt] = n;
+						}
+						if (Object.keys(edges).length > 0) out[src] = edges;
+					}
+					return out;
+				};
 				return json(res, {
-					resolved: mc.resolvedLinks ?? {},
-					unresolved: mc.unresolvedLinks ?? {},
+					dir,
+					resolved: clean(mc.resolvedLinks),
+					unresolved: clean(mc.unresolvedLinks),
 				});
 			}
 
@@ -166,6 +201,7 @@ export default class McpBridge extends Plugin {
 				}
 				const notes: Array<Record<string, unknown>> = [];
 				const subdirCount: Record<string, number> = {};
+				const subdirHasIndex: Record<string, boolean> = {};
 				for (const f of this.app.vault.getMarkdownFiles()) {
 					if (prefix && !f.path.startsWith(prefix)) continue;
 					const rest = f.path.slice(prefix.length);
@@ -173,6 +209,9 @@ export default class McpBridge extends Plugin {
 					if (slash >= 0) {
 						const child = prefix + rest.slice(0, slash);
 						subdirCount[child] = (subdirCount[child] ?? 0) + 1;
+						// README directly under this subdir → flag it so callers know
+						// where to start reading instead of enumerating every note.
+						if (rest.slice(slash + 1) === "README.md") subdirHasIndex[child] = true;
 						continue;
 					}
 					const cache = this.app.metadataCache.getFileCache(f) ?? {};
@@ -195,7 +234,7 @@ export default class McpBridge extends Plugin {
 					});
 				}
 				const dirs = Object.entries(subdirCount)
-					.map(([d, count]) => ({ dir: d, count }))
+					.map(([d, count]) => ({ dir: d, count, hasIndex: subdirHasIndex[d] ?? false }))
 					.sort((a, b) => a.dir.localeCompare(b.dir));
 				return json(res, { dir, dirs, notes });
 			}
