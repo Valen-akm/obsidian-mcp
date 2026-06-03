@@ -96,8 +96,9 @@ class ObsidianClient:
         resp = await self._get(f"/links/{file_path.lstrip('/')}/")
         return resp.json().get("files", [])
 
-    async def index(self) -> list[dict[str, Any]]:
-        resp = await self._get("/index/")
+    async def index(self, dir: str = "") -> dict[str, Any]:
+        params = {"dir": dir} if dir else None
+        resp = await self._get("/index/", params=params)
         return resp.json()
 
     async def graph(self) -> dict[str, Any]:

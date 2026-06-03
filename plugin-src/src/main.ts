@@ -108,7 +108,9 @@ export default class McpBridge extends Plugin {
 
 			if (method === "GET" && path === "/tags/") {
 				const raw = (this.app.metadataCache as any).getTags?.() ?? {};
-				const tags = Object.entries(raw).map(([tag, count]) => ({ tag, count }));
+				const tags = Object.entries(raw)
+					.map(([tag, count]) => ({ tag, count }))
+					.filter((t) => !isHexColorTag(t.tag.replace(/^#/, "")));
 				return json(res, tags);
 			}
 
@@ -149,6 +151,12 @@ export default class McpBridge extends Plugin {
 			}
 
 			if (method === "GET" && path === "/index/") {
+				// One level at a time, like a file browser: return the notes that live
+				// directly in `dir`, plus a rolled-up count for each immediate subdir.
+				// Default (dir="") is the vault root, so callers drill down on demand
+				// instead of pulling every note in the tree at once.
+				const dir = (url.searchParams.get("dir") ?? "").replace(/^\/+|\/+$/g, "");
+				const prefix = dir ? `${dir}/` : "";
 				const resolved = this.app.metadataCache.resolvedLinks;
 				const backCount: Record<string, number> = {};
 				for (const src of Object.keys(resolved)) {
@@ -156,26 +164,40 @@ export default class McpBridge extends Plugin {
 						backCount[tgt] = (backCount[tgt] ?? 0) + 1;
 					}
 				}
-				const items = this.app.vault.getMarkdownFiles().map((f) => {
+				const notes: Array<Record<string, unknown>> = [];
+				const subdirCount: Record<string, number> = {};
+				for (const f of this.app.vault.getMarkdownFiles()) {
+					if (prefix && !f.path.startsWith(prefix)) continue;
+					const rest = f.path.slice(prefix.length);
+					const slash = rest.indexOf("/");
+					if (slash >= 0) {
+						const child = prefix + rest.slice(0, slash);
+						subdirCount[child] = (subdirCount[child] ?? 0) + 1;
+						continue;
+					}
 					const cache = this.app.metadataCache.getFileCache(f) ?? {};
 					const fm = cache.frontmatter ?? {};
 					const inlineTags = (cache.tags ?? []).map((t) => t.tag.replace(/^#/, ""));
 					const fmTags = normalizeTags((fm as any).tags);
-					const tags = Array.from(new Set([...fmTags, ...inlineTags]));
+					const tags = Array.from(new Set([...fmTags, ...inlineTags])).filter(
+						(t) => !isHexColorTag(t)
+					);
 					const h1 = (cache.headings ?? []).find((h) => h.level === 1);
-					const slash = f.path.lastIndexOf("/");
-					return {
+					notes.push({
 						path: f.path,
 						title: h1?.heading ?? f.basename,
 						tags,
-						frontmatter: fm,
+						frontmatter: scalarFrontmatter(fm as Record<string, unknown>),
 						mtime: f.stat.mtime,
-						dir: slash >= 0 ? f.path.slice(0, slash) : "",
+						dir,
 						nOut: resolved[f.path] ? Object.keys(resolved[f.path]).length : 0,
 						nBack: backCount[f.path] ?? 0,
-					};
-				});
-				return json(res, items);
+					});
+				}
+				const dirs = Object.entries(subdirCount)
+					.map(([d, count]) => ({ dir: d, count }))
+					.sort((a, b) => a.dir.localeCompare(b.dir));
+				return json(res, { dir, dirs, notes });
 			}
 
 			if (method === "GET" && path.startsWith("/metadata/")) {
@@ -197,21 +219,35 @@ export default class McpBridge extends Plugin {
 				const query = url.searchParams.get("query") ?? "";
 				if (!query) return json(res, []);
 				const ctxLen = parseInt(url.searchParams.get("contextLength") ?? "100", 10);
-				const q = query.toLowerCase();
+				// Split on whitespace and require EVERY term to match somewhere in the
+				// note (content, title, or tags) — AND semantics, like Obsidian search.
+				const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
 				const results: Array<{ filename: string; score: number; context: string }> = [];
 				for (const file of this.app.vault.getMarkdownFiles()) {
 					const content = await this.app.vault.cachedRead(file);
-					const idx = content.toLowerCase().indexOf(q);
-					const titleHit = file.basename.toLowerCase().includes(q);
+					const contentLower = content.toLowerCase();
+					const titleLower = file.basename.toLowerCase();
 					const cache = this.app.metadataCache.getFileCache(file);
-					const tagHit = (cache?.tags ?? []).some((t) => t.tag.toLowerCase().includes(q));
-					if (idx < 0 && !titleHit && !tagHit) continue;
+					const tagsLower = (cache?.tags ?? []).map((t) => t.tag.toLowerCase());
+					let score = 0;
+					let firstIdx = -1;
+					const allMatched = terms.every((term) => {
+						const idx = contentLower.indexOf(term);
+						const inContent = idx >= 0;
+						const inTitle = titleLower.includes(term);
+						const inTags = tagsLower.some((t) => t.includes(term));
+						if (!inContent && !inTitle && !inTags) return false;
+						if (inContent && (firstIdx < 0 || idx < firstIdx)) firstIdx = idx;
+						score += (inContent ? 1 : 0) + (inTitle ? 1 : 0) + (inTags ? 1 : 0);
+						return true;
+					});
+					if (!allMatched) continue;
 					let context = "";
-					if (idx >= 0) {
-						const start = Math.max(0, idx - Math.floor(ctxLen / 2));
-						context = content.slice(start, idx + query.length + Math.floor(ctxLen / 2));
+					if (firstIdx >= 0) {
+						const half = Math.floor(ctxLen / 2);
+						const start = Math.max(0, firstIdx - half);
+						context = content.slice(start, firstIdx + terms[0].length + half);
 					}
-					const score = (idx >= 0 ? 1 : 0) + (titleHit ? 1 : 0) + (tagHit ? 1 : 0);
 					results.push({ filename: file.path, score, context });
 				}
 				results.sort((a, b) => b.score - a.score);
@@ -253,6 +289,34 @@ function normalizeTags(value: unknown): string[] {
 	if (!value) return [];
 	const list = Array.isArray(value) ? value : String(value).split(/[,\s]+/);
 	return list.map((t) => String(t).replace(/^#/, "")).filter(Boolean);
+}
+
+// Notes that document color palettes write hex codes (#ffffff, #1a1a1a) in their
+// body; Obsidian picks these up as tags and they swamp the real tag list. Drop
+// 6-digit hex and 3-digit hex that contains a digit. Pure-letter short tags like
+// #bad / #add / #fff are kept — a real word is far more likely than a 3-letter color.
+function isHexColorTag(tag: string): boolean {
+	if (/^[0-9a-fA-F]{6}$/.test(tag)) return true;
+	if (/^[0-9a-fA-F]{3}$/.test(tag) && /[0-9]/.test(tag)) return true;
+	return false;
+}
+
+// Keep only short scalar frontmatter values. Arrays/objects (e.g. full color-token
+// maps in design notes) and long prose (description/vibe blurbs) bloat the index and
+// are better fetched per-note via get_metadata. tags live in their own field, so
+// frontmatter.tags is redundant here.
+const MAX_SCALAR_LEN = 80;
+function scalarFrontmatter(fm: Record<string, unknown>): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+	for (const [k, v] of Object.entries(fm)) {
+		if (k === "tags" || k === "position") continue;
+		if (typeof v === "string") {
+			if (v.length <= MAX_SCALAR_LEN) out[k] = v;
+		} else if (v === null || typeof v === "number" || typeof v === "boolean") {
+			out[k] = v;
+		}
+	}
+	return out;
 }
 
 function tagMatches(candidate: string, query: string): boolean {

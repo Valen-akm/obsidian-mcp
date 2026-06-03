@@ -60,9 +60,9 @@ async def files_by_tag(tag: str) -> list[dict[str, Any]]:
 
 
 @mcp.tool()
-async def get_index() -> list[dict[str, Any]]:
-    """Return a lightweight skeleton of EVERY note in the vault (no body text): path, title, tags, frontmatter, mtime, dir, and outgoing/backlink counts (nOut/nBack). Call this FIRST to get a global map of the vault before deciding what to read — it guarantees you never miss a note that keyword search wouldn't surface."""
-    return await client().index()
+async def get_index(dir: str = "") -> dict[str, Any]:
+    """Browse the vault ONE level at a time, like a file explorer. Returns {dir, dirs, notes}: 'notes' are the notes living directly in `dir` (path, title, tags, scalar frontmatter, mtime, outgoing/backlink counts nOut/nBack — use get_metadata for full/nested frontmatter); 'dirs' are immediate subdirectories with a rolled-up note `count` (not expanded). Call with dir="" first to see the vault's top level, then pass a subdir path (e.g. "api.tiwork.ai/notes/otel") to drill down. This keeps large/irrelevant trees (e.g. references/) collapsed instead of dumping every note at once."""
+    return await client().index(dir)
 
 
 @mcp.tool()
